@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 // MatrixMix — 终端数字雨（单文件版，一条命令直接跑，无字体隔离）
-// 用法: MatrixMix [关键词|YouTube链接]   环境变量 MATRIXMIX_AUDIO=0 关声音
+// 会跟着音乐起伏的数字雨：从 YouTube 拉背景音(默认 lofi 电台，可传歌名/链接/ytsearch)，
+//   实时算 RMS 音量，驱动拖尾长度与下落节奏 — 雨跟着歌呼吸，不是死的
+// 用法: MatrixMix [关键词|YouTube链接]   环境变量 MATRIXMIX_AUDIO=0 关声音(也关掉音乐联动)
 // 默认混合模式(ASCII+全角片假名混排, 每格固定2列宽对齐);  K 循环 混合→ASCII→片假名,  q/Ctrl+C/Esc 退出
 // 渲染: 增量脏矩形(仅重写变化的格子), 消除整片闪
 const { spawn, execFileSync } = require('child_process');

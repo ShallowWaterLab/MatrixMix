@@ -1,7 +1,8 @@
 # MatrixMix — 终端数字雨
 
-一个纯命令行的极客数字雨：真彩色纯绿、ASCII 与全角片假名混排、增量渲染无整屏闪烁、
-每列独立速度、拖尾随音乐起伏。配 Node + ffmpeg + yt-dlp 即可边听歌边看雨。
+一款**会跟着音乐起伏**的终端数字雨工具。从 YouTube 拉流当背景音（默认 lofi 电台，也可传歌名 / 链接 / `ytsearch:`），真彩色纯绿数字雨的**拖尾长度与下落节奏实时跟随音量起伏**——雨跟着歌呼吸，不是死的。配 Node + ffmpeg + yt-dlp，单文件、一条命令即跑，支持 ASCII 与全角片假名混排、K 切换字符集。
+
+> MatrixMix — a terminal Matrix-rain that **breathes with your music**. It pulls a live soundtrack from YouTube (default: lofi radio; or any song name / link / `ytsearch:`), and its truecolor green rain's **trail length and fall tempo pulse in real time with the audio volume**. Single-file, one command to run, with mixed ASCII + full-width katakana glyphs and a K key to switch character sets.
 
 ## 安装
 
