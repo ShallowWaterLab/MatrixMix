@@ -1,0 +1,161 @@
+#!/usr/bin/env node
+'use strict';
+// MatrixMix — 终端数字雨（单文件版，一条命令直接跑，无字体隔离）
+// 用法: MatrixMix [关键词|YouTube链接]   环境变量 MATRIXMIX_AUDIO=0 关声音
+// 默认混合模式(ASCII+全角片假名混排, 每格固定2列宽对齐);  K 循环 混合→ASCII→片假名,  q/Ctrl+C/Esc 退出
+// 渲染: 增量脏矩形(仅重写变化的格子), 消除整片闪
+const { spawn, execFileSync } = require('child_process');
+const YT = (process.env.HOME || '/home/hermes') + '/.local/bin/yt-dlp';
+
+const COLS0 = process.stdout.columns || 80;
+const ROWS0 = process.stdout.rows || 24;
+const args = process.argv.slice(2);
+let query;
+if (args.length === 0) query = 'ytsearch1:lofi hip hop radio';
+else if (args[0].startsWith('http') || args[0].startsWith('ytsearch')) query = args.join(' ');
+else query = 'ytsearch1:' + args.join(' ');
+
+const err = (s) => process.stderr.write(s + '\n');
+err('♪ 解析音源: ' + query);
+let url;
+try {
+  const out = execFileSync(YT, ['--js-runtimes', 'node', '-f', 'bestaudio', '-g', query], { maxBuffer: 1 << 20 }).toString();
+  const lines = out.split('\n').map(l => l.trim()).filter(Boolean);
+  url = lines[lines.length - 1];
+} catch (e) { err('✗ 解析失败: ' + e.message); process.exit(1); }
+if (!url || !/^https?:\/\//.test(url)) { err('✗ 没拿到直链'); process.exit(1); }
+err('♪ 直链就绪，启动数字雨…  (Ctrl+C / q 退出, K 切换字符)');
+
+// ---- 字符集 ----
+const ASCII_CH = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:.=*+-<>|".split('');
+const KANA_CH  = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョ".split('');
+const MIX_CH   = ASCII_CH.concat(KANA_CH);
+const MODES = ['mix', 'ascii', 'kana'];
+let mi = 0;                                  // 默认混合模式
+let CHARS = MIX_CH;
+const isKana = (ch) => { const c = ch.codePointAt(0); return c >= 0x30A0 && c <= 0x30FF; };
+const rc = () => CHARS[(Math.random() * CHARS.length) | 0];
+const MATRIXMIX_FPS = Math.max(4, +(process.env.MATRIXMIX_FPS || 16));
+const MATRIXMIX_SPEED = +(process.env.MATRIXMIX_SPEED || 1);
+
+// ---- 网格: 每格固定 2 列宽; 整屏都是雨(无状态条) ----
+let cols = COLS0, rows = ROWS0, rainRows = ROWS0, bright, chars, heads, prev, colSpeed, logicalCols;
+function initGrid() {
+  cols = process.stdout.columns || COLS0;
+  rows = process.stdout.rows || ROWS0;
+  rainRows = rows;
+  logicalCols = Math.max(1, Math.floor(cols / 2));
+  bright = Array.from({ length: rainRows }, () => new Float32Array(logicalCols));
+  chars  = Array.from({ length: rainRows }, () => new Array(logicalCols).fill(' '));
+  prev   = Array.from({ length: rainRows }, () => new Array(logicalCols).fill(null));
+  heads  = new Array(logicalCols).fill(0).map(() => -Math.random() * rainRows);
+  colSpeed = new Array(logicalCols).fill(0).map(() => 0.6 + Math.random() * 0.8);  // 每列固定速度差 0.6~1.4x
+}
+initGrid();
+let energy = 0;
+
+// ---- 抽流 + 解 PCM ----
+const ffmpeg = spawn('ffmpeg', ['-i', url, '-f', 's16le', '-ac', '1', '-ar', '8000', '-loglevel', 'error', '-'], { stdio: ['ignore', 'pipe', 'ignore'] });
+let ffplay = null;
+if (process.env.MATRIXMIX_AUDIO !== '0') {
+  ffplay = spawn('ffplay', ['-nodisp', '-loglevel', 'error', '-f', 's16le', '-ar', '8000', '-ch_layout', 'mono', '-i', '-'], { stdio: ['pipe', 'ignore', 'ignore'] });
+  ffplay.on('error', () => {});
+  ffplay.on('close', () => { ffplay = null; });
+}
+let sumSq = 0, n = 0; const W = 400;
+ffmpeg.stdout.on('data', (buf) => {
+  if (ffplay && ffplay.stdin && !ffplay.stdin.destroyed) { try { ffplay.stdin.write(buf); } catch (e) {} }
+  for (let i = 0; i + 1 < buf.length; i += 2) {
+    const s = buf.readInt16LE(i); sumSq += s * s; n++;
+    if (n >= W) {
+      const rms = Math.sqrt(sumSq / n) / 32768;
+      const lvl = Math.min(1, rms * 9);
+      energy += (lvl - energy) * (lvl > energy ? 0.5 : 0.12);
+      sumSq = 0; n = 0;
+    }
+  }
+});
+ffmpeg.on('close', () => cleanup(0));
+
+// ---- 终端 ----
+if (process.stdin.isTTY) {
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.on('data', d => {
+    const s = d.toString();
+    if (d[0] === 3 || d[0] === 27 || s === 'q') cleanup(0);
+    else if (s === 'k' || s === 'K') {        // 循环切换 混合→ASCII→片假名
+      mi = (mi + 1) % MODES.length;
+      CHARS = mi === 0 ? MIX_CH : mi === 1 ? ASCII_CH : KANA_CH;
+      initGrid();
+    }
+  });
+}
+if (process.stdout.isTTY) process.stdout.write('\x1b[?25l\x1b[2J\x1b[3J\x1b[H');
+
+function cleanup(code) {
+  try { process.stdout.write('\x1b[?25h\x1b[0m'); } catch (e) {}
+  try { if (process.stdout.isTTY) process.stdout.write('\x1b[2J\x1b[H'); } catch (e) {}
+  try { ffmpeg.kill(); } catch (e) {}
+  try { if (ffplay) ffplay.kill(); } catch (e) {}
+  process.exit(code || 0);
+}
+process.on('SIGINT', () => cleanup(0));
+process.on('SIGTERM', () => cleanup(0));
+process.stdout.on('resize', () => initGrid());
+
+// ---- 单格应写内容(真彩色纯绿, 绝不偏蓝) ----
+function cellStr(y, x) {
+  const b = bright[y][x];
+  const c = chars[y][x];
+  if (b < 0.06) return '\x1b[0m  ';                         // 背景: 复位 + 2 空格, 稳定不闪
+  let col;
+  if (b > 0.92) col = '\x1b[38;2;190;255;190m';             // 头部: 亮白绿
+  else { const g = Math.round(b * 255); col = '\x1b[38;2;0;' + g + ';0m'; }  // 拖尾: 纯绿渐变
+  let body;
+  if (c === ' ' || c === '') body = '  ';
+  else if (isKana(c)) body = c;                            // 全角片假名天然 2 列
+  else body = c + ' ';                                     // ASCII 补 1 空格凑满 2 列
+  return col + body;
+}
+
+// ---- 增量渲染: 仅重写与上一帧不同的格子(脏矩形), 消除整片闪 ----
+function draw() {
+  let out = '';
+  for (let y = 0; y < rainRows; y++) {
+    let x = 0;
+    while (x < logicalCols) {
+      const cur = cellStr(y, x);
+      if (cur !== prev[y][x]) {
+        let run = '', sx = x;
+        while (x < logicalCols && cellStr(y, x) !== prev[y][x]) {
+          const cs = cellStr(y, x);
+          run += cs; prev[y][x] = cs; x++;
+        }
+        out += '\x1b[' + (y + 1) + ';' + (sx * 2 + 1) + 'H' + run;   // 跳到起点, 连写整段(每格定宽2列)
+      } else x++;
+    }
+  }
+  if (out) process.stdout.write(out);
+}
+
+// ---- 运动: 浮点连续下落(不跳帧) + 仅"穿过新行"那帧随机该格字符一次(不每帧狂跳) ----
+function frame() {
+  const fade = 0.93 + 0.04 * energy;          // 衰减更慢→拖尾更长(安静约翻倍, 音乐响时更长)
+  const speed = (0.14 + energy * 0.45) * MATRIXMIX_SPEED;         // 行/帧, 减半: 安静顺滑下落, 音乐响时明显加速
+  const spawnP = 0.22 + 0.4 * energy;
+  for (let y = 0; y < rainRows; y++) { const br = bright[y]; for (let x = 0; x < logicalCols; x++) br[x] *= fade; }
+  for (let x = 0; x < logicalCols; x++) {
+    const prevHy = Math.floor(heads[x]);
+    heads[x] += speed * colSpeed[x];                          // 连续推进, 每列速度不同, 不跳
+    const hy = Math.floor(heads[x]);
+    for (let yy = prevHy + 1; yy <= hy; yy++) {               // 只在本帧跨越的新行定字符一次
+      if (yy >= 0 && yy < rainRows) { chars[yy][x] = rc(); bright[yy][x] = 1; }
+    }
+    if (heads[x] > rainRows + 2) {
+      if (Math.random() < spawnP * 0.18) heads[x] = -Math.random() * rainRows * 0.6;
+    }
+  }
+  draw();
+}
+setInterval(frame, Math.round(1000 / MATRIXMIX_FPS));

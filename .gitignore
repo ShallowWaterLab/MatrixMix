@@ -1,0 +1,5 @@
+# MatrixMix 发布包
+# 单文件本体 + 安装器 + 说明, 无构建产物
+MatrixMix.tar.gz
+.DS_Store
+*.log
