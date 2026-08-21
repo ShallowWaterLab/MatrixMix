@@ -26,7 +26,6 @@
 
 环境变量：
 - `MATRIXMIX_AUDIO=0`   只看雨，不抽声音（也顺便不驱动雨速/拖尾随音量变化）
-  （环境变量前缀沿用 MATRIXMIX_* 历史命名，无需改动）
 - `MATRIXMIX_FPS=24`    帧率（默认 16）
 - `MATRIXMIX_SPEED=2`   整体速度倍率（默认 1）
 
