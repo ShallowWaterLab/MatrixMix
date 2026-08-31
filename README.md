@@ -10,10 +10,8 @@
 
     bash install.sh
 
-安装器会自动检测 `node` / `ffmpeg` / `yt-dlp`，缺哪个补哪个（Debian/Arch/macOS 均可），
-最后把本体装到 `~/.local/bin/MatrixMix`。
-
-> 若 `~/.local/bin` 不在 PATH，安装器会提示你加一行到 `.bashrc` / `.zshrc`。
+安装器真正一键：自动检测并补装 `node` / `ffmpeg` / `yt-dlp`（Debian / Arch / macOS 均可；会自动处理 nodejs 命名、macOS Xcode CLT、Ubuntu universe 源），并自动把 `~/.local/bin` 写进 PATH，
+最后把本体装到 `~/.local/bin/MatrixMix`，装完即可直接运行 `MatrixMix`。
 
 ## 使用
 
