@@ -7,7 +7,7 @@
 // 默认混合模式(ASCII+全角片假名混排, 每格固定2列宽对齐);  K 循环 混合→ASCII→片假名,  q/Ctrl+C/Esc 退出
 // 渲染: 增量脏矩形(仅重写变化的格子), 消除整片闪
 const { spawn, execFileSync } = require('child_process');
-const YT = (process.env.HOME || '/home/hermes') + '/.local/bin/yt-dlp';
+const YT = (process.env.HOME || require('os').homedir()) + '/.local/bin/yt-dlp';
 
 const COLS0 = process.stdout.columns || 80;
 const ROWS0 = process.stdout.rows || 24;
